@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning Final"
+author: "Phil D."
+date: "4/16/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages; echo}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(randomForest)
+library(knitr)
+library(rattle)
+set.seed(16161)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Getting and Cleaning Data
+
+Importing the data:
+
+```{r import}
+training <- read.csv(url("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"), na.strings=c("NA","#DIV/0!",""))
+```
+
+Split the training data into a training and test set (for model refinement purposes).
+
+```{r split}
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]
+myTesting <- training[-inTrain, ]
+```
+
+Clean the data by removing near zero variables and columns that contain N/As. This data would expand the complexity of the model without providing additional value.
+
+```{r clean}
+nzv <- nearZeroVar(myTraining, saveMetrics=TRUE)
+myTraining <- myTraining[,nzv$nzv==FALSE]
+myTesting <- myTesting[,nzv$nzv==FALSE]
+testing <- testing[,nzv$nzv==FALSE]
+
+myTraining <- myTraining[, colSums(is.na(myTraining)) == 0]
+myTesting <- myTesting[, colSums(is.na(myTesting)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+
+The first seven columns of data are purely describing the experiment. They are not relevant to the prediction. I remove them to maintain simplicity in my model.
+
+```{r remove}
+myTraining <- myTraining[,-c(1:7)]
+myTesting <- myTesting[,-c(1:7)]
+testing <-testing[,-c(1:7)]
+```
+
+## Classification Tree Model
+
+Creating the classification tree model
+
+```{r ctfit}
+control <- trainControl(method = "cv", number = 5)
+fit_rpart <- train(classe ~ ., data = myTraining, method = "rpart", 
+                   trControl = control)
+```
+
+Visual of the tree
+
+```{r ctplot}
+fancyRpartPlot(fit_rpart$finalModel)
+```
+
+
+```{r ctpredict}
+pred<-predict(fit_rpart,myTesting)
+conf_rpart <- confusionMatrix(myTesting$classe, pred)
+conf_rpart
+```
+
+Using model to predict the test data indicates that the accuracy of the model is only ~58%. 
+
+## Random Forest Model
+
+In an attempt to get a more accurate model, I used the random forest method.
+
+```{r randforest}
+fit_rf <- train(classe ~ ., data = myTraining, method = "rf", 
+                trControl = control)
+```
+
+```{r rfpredict}
+pred<-predict(fit_rf,myTesting)
+conf_rf <- confusionMatrix(myTesting$classe, pred)
+conf_rf
+```
+This time predicting based on my test set I find an accuracy of 99%.
+
+# Predicting Final Test Set
+
+I use this random forest model to predict the quiz answers and got the correct answers.
+
+```{r predictquiz}
+predict(fit_rf,testing)
+```
+
+
+
